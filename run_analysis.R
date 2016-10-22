@@ -1,51 +1,68 @@
-#create directory, load the data zip file nad unzip it
-dirHAR = "./HAR"
-if(!file.exists(dirHAR)) {dir.create(dirHAR)}
-zipFileUrl = "https://d396qusza40orc.cloudfront.net/getdata%2Fprojectfiles%2FUCI%20HAR%20Dataset.zip"
-destFile = paste(dirHAR, "data.zip", sep="/")
-download.file(zipFileUrl, destfile=destFile, method="curl")
-unzip(destFile, exdir=dirHAR)
+##1
+setwd("C:/Users/Chunyoung/Documents/R")
+if(!file.exists("./data")){dir.create("./data")}
+fileUrl <- "https://d396qusza40orc.cloudfront.net/getdata%2Fprojectfiles%2FUCI%20HAR%20Dataset.zip"
+download.file(fileUrl,destfile="./data/Dataset.zip")
 
-#set the required directories
-dirData = paste(dirHAR, "UCI HAR Dataset", sep="/")
-dirTrain = paste(dirData, "train", sep="/")
-dirTest = paste(dirData, "test", sep="/")
+# Unzip dataSet to /data directory
+unzip(zipfile="./data/Dataset.zip",exdir="./data")
 
-#reading and filtering features (only "mean" and "std" features)
-file = paste(dirData, "features.txt", sep="/")
-features <- read.table(file, sep=" ")
-filtered_features_indexes <- (grepl("mean\\(\\)", features[,2]) | grepl("std\\(\\)", features[,2]))
-filtered_features_names <- as.character(features[filtered_features_indexes,2])
 
-#reading train files (only features in filtered_features)
-widthCols = (2*as.numeric(filtered_features_indexes)-1)*16
-file = paste(dirTrain, "X_train.txt", sep="/")
-X_train <- read.fwf(file, width=widthCols, sep="", comment.char="", colClasses="numeric")
-file = paste(dirTrain, "y_train.txt", sep="/")
-y_train <- read.table(file)
-file = paste(dirTrain, "subject_train.txt", sep="/")
-subject_train <- read.table(file)
-train_data <- cbind(X_train, y_train, subject_train)
+# Reading trainings tables:
+x_train <- read.table("./data/UCI HAR Dataset/train/X_train.txt")
+y_train <- read.table("./data/UCI HAR Dataset/train/y_train.txt")
+subject_train <- read.table("./data/UCI HAR Dataset/train/subject_train.txt")
 
-#reading test files (only features in filtered_features)
-file = paste(dirTest, "X_test.txt", sep="/")
-X_test <- read.fwf(file, width=widthCols, sep="", comment.char="", colClasses="numeric")
-file = paste(dirTest, "y_test.txt", sep="/")
-y_test <- read.table(file)
-file = paste(dirTest, "subject_test.txt", sep="/")
-subject_test <- read.table(file)
-test_data <- cbind(X_test, y_test, subject_test)
+# Reading testing tables:
+x_test <- read.table("./data/UCI HAR Dataset/test/X_test.txt")
+y_test <- read.table("./data/UCI HAR Dataset/test/y_test.txt")
+subject_test <- read.table("./data/UCI HAR Dataset/test/subject_test.txt")
 
-#merge test and train datasets and label the columns
-all_data <- rbind(train_data, test_data)
-colnames(all_data) <- c(filtered_features_names, c("label", "subject"))
+# Reading feature vector:
+features <- read.table('./data/UCI HAR Dataset/features.txt')
 
-#create a data set with the average of each variable for each activity and each subject
-all_average <- aggregate(all_data[,1:66], by=list(all_data$subject), FUN="mean")
-colnames(all_average)[1] = "subject"
+# Reading activity labels:
+activityLabels = read.table('./data/UCI HAR Dataset/activity_labels.txt')
 
-#Write to the disk as CSV files
-file = paste(dirData, "all_data.txt", sep="/")
-write.csv(all_data, file, row.names=FALSE)
-file = paste(dirData, "all_average.txt", sep="/")
-write.csv(all_average, file, row.names=FALSE)
+
+##3.
+colnames(x_train) <- features[,2] 
+colnames(y_train) <-"activityId"
+colnames(subject_train) <- "subjectId"
+
+colnames(x_test) <- features[,2] 
+colnames(y_test) <- "activityId"
+colnames(subject_test) <- "subjectId"
+
+colnames(activityLabels) <- c('activityId','activityType')
+
+
+
+##4. 
+mrg_train <- cbind(y_train, subject_train, x_train)
+mrg_test <- cbind(y_test, subject_test, x_test)
+setAllInOne <- rbind(mrg_train, mrg_test)
+
+##5
+colNames <- colnames(setAllInOne)
+
+##6
+mean_and_std <- (grepl("activityId" , colNames) | 
+                   grepl("subjectId" , colNames) | 
+                   grepl("mean.." , colNames) | 
+                   grepl("std.." , colNames) 
+)
+
+##7
+setForMeanAndStd <- setAllInOne[ , mean_and_std == TRUE]
+
+##8
+setWithActivityNames <- merge(setForMeanAndStd, activityLabels,
+                              by='activityId',
+                              all.x=TRUE)
+##9
+secTidySet <- aggregate(. ~subjectId + activityId, setWithActivityNames, mean)
+secTidySet <- secTidySet[order(secTidySet$subjectId, secTidySet$activityId),]
+
+##10
+write.table(secTidySet, "secTidySet.txt", row.name=FALSE)
